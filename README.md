@@ -27,9 +27,9 @@ pull(
   })
 )
 ```
-note that `pull(a, b, c)` is basically the same as `a.pipe(b).pipe(c)`.
+Note that `pull(a, b, c)` is basically the same as `a.pipe(b).pipe(c)`.
 
-to grok how pull-streams work, read through [pull-streams by example](https://github.com/dominictarr/pull-stream-examples)
+To grok how pull-streams work, read through [pull-streams by example](https://github.com/dominictarr/pull-stream-examples)
 
 ## How do I do X with pull-streams?
 
@@ -50,7 +50,7 @@ correct back pressure is preserved.
 
 Instead of a readable stream, and a writable stream, there is a `readable` stream,
  (aka "Source") and a `reader` stream (aka "Sink"). Through streams
-is a Sink that returns a Source.
+are Sinks that return Sources.
 
 See also:
 * [Sources](./docs/sources/index.md)
@@ -79,13 +79,12 @@ function random (n) {
     cb(null, Math.random())
   }
 }
-
 ```
 
-### Sink; (aka, Reader, "writable")
+### Sink (aka, Reader, "writable")
 
 A sink is just a `reader` function that calls a Source (read function),
-until it decides to stop, or the readable ends. `cb(err || true)`
+until it decides to stop, or the readable ends with `cb(err || true)`.
 
 All [Throughs](./docs/throughs/index.md)
 and [Sinks](./docs/sinks/index.md)
@@ -113,10 +112,9 @@ var rand = random(100)
 var log = logger()
 
 log(rand) //"pipe" the streams.
-
 ```
 
-but, it's easier to read if you use's pull-stream's `pull` method
+But, it's easier to read if you use's pull-stream's `pull` method:
 
 ```js
 var pull = require('pull-stream')
@@ -151,8 +149,8 @@ Data will not start moving until the whole thing is connected.
 pull(source, through, sink)
 ```
 
-some times, it's simplest to describe a stream in terms of other streams.
-pull can detect what sort of stream it starts with (by counting arguments)
+Some times, it's simplest to describe a stream in terms of other streams.
+`pull` can detect what sort of stream it starts with (by counting arguments)
 and if you pull together through streams, it gives you a new through stream.
 
 ```js
@@ -163,8 +161,8 @@ var tripleThrough =
 pull(source(), tripleThrough, sink())
 ```
 
-pull detects if it's missing a Source by checking function arity,
-if the function takes only one argument it's either a sink or a through.
+`pull` detects if it's missing a Source by checking function arity,
+If the function takes only one argument it's either a sink or a through.
 Otherwise it's a Source.
 
 ## Duplex Streams
@@ -172,9 +170,9 @@ Otherwise it's a Source.
 Duplex streams, which are used to communicate between two things,
 (i.e. over a network) are a little different. In a duplex stream,
 messages go both ways, so instead of a single function that represents the stream,
-you need a pair of streams. `{source: sourceStream, sink: sinkStream}`
+you need a pair of streams: `{source: sourceStream, sink: sinkStream}`.
 
-pipe duplex streams like this:
+Pipe duplex streams like this:
 
 ``` js
 var a = duplex()
@@ -192,7 +190,6 @@ b.sink(a.source); a.sink(b.source)
 pull(a, b, a)
 
 //"pull from a to b and then back to a"
-
 ```
 
 ## Design Goals & Rationale
@@ -217,15 +214,15 @@ of objects.
 ### A pipeline is also a stream.
 
 Something like this should work: `a.pipe(x.pipe(y).pipe(z)).pipe(b)`
-this makes it possible to write a custom stream simply by
+This makes it possible to write a custom stream simply by
 combining a few available streams.
 
 ### Propagate End/Error conditions.
 
 If a stream ends in an unexpected way (error),
 then other streams in the pipeline should be notified.
-(this is a problem in node streams - when an error occurs,
-the stream is disconnected, and the user must handle that specially)
+(This is a problem in node streams - when an error occurs,
+the stream is disconnected, and the user must handle that specially.)
 
 Also, the stream should be able to be ended from either end.
 
@@ -234,7 +231,7 @@ Also, the stream should be able to be ended from either end.
 Very simple transform streams must be able to transfer back pressure
 instantly.
 
-This is a problem in node streams, pause is only transferred on write, so
+This is a problem in Node streams. Pause is only transferred on write, so
 on a long chain (`a.pipe(b).pipe(c)`), if `c` pauses, `b` will have to write to it
 to pause, and then `a` will have to write to `b` to pause.
 If `b` only transforms `a`'s output, then `a` will have to write to `b` twice to
@@ -249,11 +246,11 @@ are not there.
 
 This makes laziness work right.
 
-### handling end, error, and abort.
+### Handling end, error, and abort
 
-in pull streams, any part of the stream (source, sink, or through)
-may terminate the stream. (this is the case with node streams too,
-but it's not handled well).
+In pull streams, any part of the stream (source, sink, or through)
+may terminate the stream. (This is the case with Node streams too,
+but it's not handled well.)
 
 #### source: end, error
 
@@ -264,47 +261,47 @@ After ending, the source *must* never `cb(null, data)`
 
 Sinks do not normally end the stream, but if they decide they do
 not need any more data they may "abort" the source by calling `read(true, cb)`.
-A abort (`read(true, cb)`) may be called before a preceding read call
+An abort (`read(true, cb)`) may be called before a preceding read call
 has called back.
 
-### handling end/abort/error in through streams
+### Handling end/abort/error in through streams
 
 Rules for implementing `read` in a through stream:
-1) Sink wants to stop. sink aborts the through
 
-    just forward the exact read() call to your source,
-    any future read calls should cb(true).
+1. Sink wants to stop. sink aborts the through
 
-2) We want to stop. (abort from the middle of the stream)
+   just forward the exact read() call to your source,
+   any future read calls should cb(true).
 
-    abort your source, and then cb(true) to tell the sink we have ended.
-    If the source errored during abort, end the sink by cb read with `cb(err)`.
-    (this will be an ordinary end/error for the sink)
+2. We want to stop. (abort from the middle of the stream)
 
-3) Source wants to stop. (`read(null, cb) -> cb(err||true)`)
+   abort your source, and then cb(true) to tell the sink we have ended.
+   If the source errored during abort, end the sink by cb read with `cb(err)`.
+   (this will be an ordinary end/error for the sink)
 
-    forward that exact callback towards the sink chain,
-    we must respond to any future read calls with `cb(err||true)`.
+3. Source wants to stop. (`read(null, cb) -> cb(err||true)`)
 
-In none of the above cases data is flowing!
-4) If data is flowing (normal operation:   `read(null, cb) -> cb(null, data)`
+   forward that exact callback towards the sink chain,
+   we must respond to any future read calls with `cb(err||true)`.
 
-    forward data downstream (towards the Sink)
-    do none of the above!
+   In none of the above cases data is flowing!
+
+4. If data is flowing (normal operation:   `read(null, cb) -> cb(null, data)`
+
+   forward data downstream (towards the Sink)
+   do none of the above!
 
 There either is data flowing (4) OR you have the error/abort cases (1-3), never both.
-
 
 ## 1:1 read-callback ratio
 
 A pull stream source (and thus transform) returns *exactly one value* per read.
 
-This differs from node streams, which can use `this.push(value)` and in internal
+This differs from Node streams, which can use `this.push(value)` and an internal
 buffer to create transforms that write many values from a single read value.
 
-Pull streams don't come with their own buffering mechanism, but [there are ways
+pull-streams don't come with their own buffering mechanism, but [there are ways
 to get around this](https://github.com/dominictarr/pull-stream-examples/blob/master/buffering.js).
-
 
 ## Minimal bundle
 
@@ -312,13 +309,11 @@ If you need only the `pull` function from this package you can reduce the size
 of the imported code (for instance to reduce a Browserify bundle) by requiring
 it directly:
 
-
 ```js
 var pull = require('pull-stream/pull')
 
 pull(random(), logger())
 ```
-
 
 ## Further Examples
 
@@ -331,9 +326,6 @@ Explore this repo further for more information about
 [sinks](./docs/sinks/index.md), and
 [glossary](./docs/glossary.md).
 
-
 ## License
 
 MIT
-
-
