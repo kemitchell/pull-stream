@@ -36,7 +36,7 @@ There is a module for that!
 Check the [pull-stream FAQ](https://github.com/pull-stream/pull-stream-faq)
 and post an issue if you have a question that is not on that.
 
-## Compatibily with node streams
+## Compatibly with node streams
 
 pull-streams are not _directly_ compatible with node streams,
 but pull-streams can be converted into node streams with
@@ -83,7 +83,7 @@ function random (n) {
 ### Sink; (aka, Reader, "writable")
 
 A sink is just a `reader` function that calls a Source (read function),
-until it decideds to stop, or the readable ends. `cb(err || true)`
+until it decides to stop, or the readable ends. `cb(err || true)`
 
 All [Throughs](./docs/throughs/index.md)
 and [Sinks](./docs/sinks/index.md)
@@ -232,16 +232,16 @@ Also, the stream should be able to be ended from either end.
 Very simple transform streams must be able to transfer back pressure
 instantly.
 
-This is a problem in node streams, pause is only transfered on write, so
+This is a problem in node streams, pause is only transferred on write, so
 on a long chain (`a.pipe(b).pipe(c)`), if `c` pauses, `b` will have to write to it
 to pause, and then `a` will have to write to `b` to pause.
 If `b` only transforms `a`'s output, then `a` will have to write to `b` twice to
 find out that `c` is paused.
 
 [reducers](https://github.com/Gozala/reducers) reducers has an interesting method,
-where synchronous tranformations propagate back pressure instantly!
+where synchronous transformations propagate back pressure instantly!
 
-This means you can have two "smart" streams doing io at the ends, and lots of dumb
+This means you can have two "smart" streams doing I/O at the ends, and lots of dumb
 streams in the middle, and back pressure will work perfectly, as if the dumb streams
 are not there.
 
