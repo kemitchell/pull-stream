@@ -1,16 +1,15 @@
 # pull-stream
 
-Minimal Pipeable Pull-stream
+Minimal, pipeable, pull streams
 
-In [classic-streams](https://github.com/nodejs/node-v0.x-archive/blob/v0.8/doc/api/stream.markdown),
-streams _push_ data to the next stream in the pipeline.
-In [new-streams](https://github.com/nodejs/node-v0.x-archive/blob/v0.10/doc/api/stream.markdown),
-data is pulled out of the source stream, into the destination.
-`pull-stream` is a minimal take on streams,
-pull streams work great for "object" streams as well as streams of raw text or binary data.
+In [classic Node.js streams](https://github.com/nodejs/node-v0.x-archive/blob/v0.8/doc/api/stream.markdown),
+streams _push_ data to the next stream in pipelines.
+In [new Node.js streams](https://github.com/nodejs/node-v0.x-archive/blob/v0.10/doc/api/stream.markdown),
+destination streams _pull_ data out of source streams.
+`pull-stream` is a minimal take on streams that pull data.
+`pull-stream`s work great for "object" streams as well as streams of raw text or binary data.
 
 [![build status](https://secure.travis-ci.org/pull-stream/pull-stream.png)](https://travis-ci.org/pull-stream/pull-stream)
-
 
 ## Quick Example
 
@@ -18,6 +17,7 @@ Stat some files:
 
 ```js
 var pull = require('pull-stream')
+var fs = require('fs')
 
 pull(
   pull.values(['file1', 'file2', 'file3']),
@@ -27,9 +27,11 @@ pull(
   })
 )
 ```
-Note that `pull(a, b, c)` is basically the same as `a.pipe(b).pipe(c)`.
 
-To grok how pull-streams work, read through [pull-streams by example](https://github.com/dominictarr/pull-stream-examples)
+Note that `pull(a, b, c)` is basically the same as `a.pipe(b).pipe(c)`.
+It's a lot like [`pump`](https://www.npmjs.com/package/pump).
+
+To grok how `pull-stream`s work, read through [pull-streams by example](https://github.com/dominictarr/pull-stream-examples)
 
 ## How do I do X with pull-streams?
 
@@ -38,68 +40,76 @@ There is a module for that!
 Check the [pull-stream FAQ](https://github.com/pull-stream/pull-stream-faq)
 and post an issue if you have a question that is not on that.
 
-## Compatibly with node streams
+## Compatibly with Node Streams
 
 pull-streams are not _directly_ compatible with node streams,
-but pull-streams can be converted into node streams with
+but you can convert a `pull-stream` into a Node stream with
 [pull-stream-to-stream](https://github.com/pull-stream/pull-stream-to-stream)
-and node streams can be converted into pull-stream using [stream-to-pull-stream](https://github.com/pull-stream/stream-to-pull-stream)
-correct back pressure is preserved.
+and convert a Node stream a pull-stream with
+[stream-to-pull-stream](https://github.com/pull-stream/stream-to-pull-stream).
+These modules preserve correct back pressure.
 
 ### Readable & Reader vs. Readable & Writable
 
-Instead of a readable stream, and a writable stream, there is a `readable` stream,
- (aka "Source") and a `reader` stream (aka "Sink"). Through streams
-are Sinks that return Sources.
+The fundamental Node streams are Readable streams and Writable streams.
+The fundamental `pull-stream`s are Source streams and Sink streams.
+Through streams are Sinks that return Sources.
+They work a lot like Node Transform streams.
 
-See also:
+This package contains a number of useful Sources, Sinks, and Throughs.
+For more information, see:
 * [Sources](./docs/sources/index.md)
 * [Throughs](./docs/throughs/index.md)
 * [Sinks](./docs/sinks/index.md)
 
-### Source (aka, Readable)
+### Sources
 
-The readable stream is just a `function read(end, cb)`,
-that may be called many times,
-and will (asynchronously) `cb(null, data)` once for each call.
+As Source is just a `function source (end, cb)`.
+A source may be called many times,
+and will call `cb(null, data)` asynchronously, once for each call.
 
-To signify an end state, the stream eventually returns `cb(err)` or `cb(true)`.
-When indicating a terminal state, `data` *must* be ignored.
+To signify an end state, a Source calls `cb(err)` or `cb(true)`.
+A Source *must* ignore data when indicating a terminal state.
 
-The `read` function *must not* be called until the previous call has called back.
-Unless, it is a call to abort the stream (`read(truthy, cb)`).
+A Source *must not* be called until the previous call has called back,
+unless the call is to abort the stream with `source(truthy, cb)`.
 
 ```js
-//a stream of random numbers.
-function random (n) {
-  return function (end, cb) {
-    if(end) return cb(end)
-    //only read n times, then stop.
-    if(0>--n) return cb(true)
-    cb(null, Math.random())
+// Create a Source of `n` random numbers.
+function createRandomSource (count) {
+  return function source (end, cb) {
+    if (end) {
+      return cb(end)
+    } else if (count === 0) {
+      return cb(true)
+    } else {
+      count--
+      return cb(null, Math.random())
+    }
   }
 }
 ```
 
-### Sink (aka, Reader, "writable")
+### Sinks
 
-A sink is just a `reader` function that calls a Source (read function),
-until it decides to stop, or the readable ends with `cb(err || true)`.
+A Sink is just a `function sink (source)`.  A Sink calls a Source
+until either the Sink decides to stop reading or the Source ends with
+`cb(err)` or `cb(true)`.
 
 All [Throughs](./docs/throughs/index.md)
 and [Sinks](./docs/sinks/index.md)
-are reader streams.
+are Sinks.
 
 ```js
 //read source and log it.
-function logger () {
-  return function (read) {
-    read(null, function next(end, data) {
+function createConsoleLogSink () {
+  return function consoleLogSink (source) {
+    source(null, function next (end, data) {
       if(end === true) return
       if(end) throw end
 
       console.log(data)
-      read(null, next)
+      source(null, next)
     })
   }
 }
@@ -108,10 +118,10 @@ function logger () {
 Since these are just functions, you can pass them to each other!
 
 ```js
-var rand = random(100)
-var log = logger()
+var randomSource = createRandomSource(100)
+var logSink = createConsoleLogSink()
 
-log(rand) //"pipe" the streams.
+logSink(randomSource) // "pipe" the streams.
 ```
 
 But, it's easier to read if you use's pull-stream's `pull` method:
@@ -119,92 +129,105 @@ But, it's easier to read if you use's pull-stream's `pull` method:
 ```js
 var pull = require('pull-stream')
 
-pull(random(), logger())
+pull(createRandomSource(100), createConsoleLogSink())
 ```
 
-### Through
+### Throughs
 
-A through stream is a reader on one end and a readable on the other.
-It's Sink that returns a Source.
-That is, it's just a function that takes a `read` function,
-and returns another `read` function.
+Throughs read data on one end and write data on the other.
+In other words, Throughs are Sinks that returns Sources,
+or `function sink (source)` that return `function source (end, cb)`.
 
 ```js
-function map (read, map) {
-  //return a readable function!
-  return function (end, cb) {
-    read(end, function (end, data) {
-      cb(end, data != null ? map(data) : null)
-    })
+function createMappingThrough (map) {
+  return function sink (source) {
+    // Return a Source!
+    return function source (end, cb) {
+      source(end, function (end, data) {
+        cb(end, data !== null ? map(data) : null)
+      })
+    }
   }
 }
+
+pull(
+  source,
+  createMappingThrough(JSON.parse),
+  sink
+)
 ```
 
-### Pipeability
+### Piping
 
-Every pipeline must go from a `source` to a `sink`.
-Data will not start moving until the whole thing is connected.
+To process data, a `pull-stream` pipeline must go from a Source to a
+Sink. Between the Source and Sink, data can flow through any number
+of Throughs.
+
+Data will not flow through a `pull-stream` pipeline until the whole
+pipeline is connected.
 
 ```js
-pull(source, through, sink)
+pull(source, firstThrough, secondThrough, sink)
 ```
 
-Some times, it's simplest to describe a stream in terms of other streams.
-`pull` can detect what sort of stream it starts with (by counting arguments)
-and if you pull together through streams, it gives you a new through stream.
+Sometimes, it's simplest to describe a stream in terms of other
+streams. If call `pull` with only Through arguments, `pull` return will
+return a new Through.
 
 ```js
-var tripleThrough =
-  pull(through1(), through2(), through3())
-//THE THREE THROUGHS BECOME ONE
+// Combine two Throughs into a new Through that processes
+// newline-delimited JSON.
+var parseNDJSON = pull(
+  buffersToLinesThrough,
+  parseJSONThrough
+)
 
-pull(source(), tripleThrough, sink())
+// Uses the new Through to process data.
+pull(source, parseNDJSON, sink)
 ```
 
-`pull` detects if it's missing a Source by checking function arity,
-If the function takes only one argument it's either a sink or a through.
-Otherwise it's a Source.
+`pull` decides what kind of `pull-stream` its arguments are by
+argument count, or arity. Sources have two arguments, `end` and `cb`,
+and Sinks and Throughs have one argument, `source`.
 
-## Duplex Streams
+## Duplexes
 
-Duplex streams, which are used to communicate between two things,
-(i.e. over a network) are a little different. In a duplex stream,
-messages go both ways, so instead of a single function that represents the stream,
-you need a pair of streams: `{source: sourceStream, sink: sinkStream}`.
+Duplex streams are used to for communication, where messages pass
+both ways.  `pull-stream` Duplexes are objects with Source and Sink
+properties like `{source: source, sink: sink}`.
 
-Pipe duplex streams like this:
+Pipe Duplexes like this:
 
 ``` js
 var a = duplex()
 var b = duplex()
 
+// Pull from `a` to `b`, and from `b` to `a`.
+pull(a, b, a)
+
+// or
+
 pull(a.source, b.sink)
 pull(b.source, a.sink)
 
-//which is the same as
+// or
 
 b.sink(a.source); a.sink(b.source)
-
-//but the easiest way is to allow pull to handle this
-
-pull(a, b, a)
-
-//"pull from a to b and then back to a"
 ```
 
 ## Design Goals & Rationale
 
 There is a deeper,
 [platonic abstraction](http://en.wikipedia.org/wiki/Platonic_idealism),
-where a streams is just an array in time, instead of in space.
-And all the various streaming "abstractions" are just crude implementations
-of this abstract idea.
+where a stream is just an array in time, instead of in space.
+All the various streaming "abstractions",
+[classic Node streams](https://github.com/joyent/node/blob/v0.8.16/doc/api/stream.markdown),
+[new Node streams](https://github.com/joyent/node/blob/v0.10/doc/api/stream.markdown), and
+[reducers](https://github.com/Gozala/reducers),
+are just crude implementations of this abstract idea.
 
-[classic-streams](https://github.com/joyent/node/blob/v0.8.16/doc/api/stream.markdown),
-[new-streams](https://github.com/joyent/node/blob/v0.10/doc/api/stream.markdown),
-[reducers](https://github.com/Gozala/reducers)
-
-The objective here is to find a simple realization of the best features of the above.
+`pull-streams` try to realize all the best features of these
+implementations as simply as possible.
 
 ### Type Agnostic
 
@@ -217,7 +240,7 @@ Something like this should work: `a.pipe(x.pipe(y).pipe(z)).pipe(b)`
 This makes it possible to write a custom stream simply by
 combining a few available streams.
 
-### Propagate End/Error conditions.
+### Propagate end and error conditions.
 
 If a stream ends in an unexpected way (error),
 then other streams in the pipeline should be notified.
@@ -226,7 +249,7 @@ the stream is disconnected, and the user must handle that specially.)
 
 Also, the stream should be able to be ended from either end.
 
-### Transparent Backpressure & Laziness
+### Make backpressure and laziness transparent.
 
 Very simple transform streams must be able to transfer back pressure
 instantly.
@@ -246,7 +269,7 @@ are not there.
 
 This makes laziness work right.
 
-### Handling end, error, and abort
+### Handle ends, errors, and aborts throughout.
 
 In pull streams, any part of the stream (source, sink, or through)
 may terminate the stream. (This is the case with Node streams too,
@@ -264,7 +287,7 @@ not need any more data they may "abort" the source by calling `read(true, cb)`.
 An abort (`read(true, cb)`) may be called before a preceding read call
 has called back.
 
-### Handling end/abort/error in through streams
+### How to handle ends, aborts, and errors in Throughs.
 
 Rules for implementing `read` in a through stream:
 
