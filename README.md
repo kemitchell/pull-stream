@@ -17,6 +17,8 @@ pull streams work great for "object" streams as well as streams of raw text or b
 Stat some files:
 
 ```js
+var pull = require('pull-stream')
+
 pull(
   pull.values(['file1', 'file2', 'file3']),
   pull.asyncMap(fs.stat),
